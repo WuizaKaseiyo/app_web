@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>三模块打分系统</title>
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    button { margin: 10px 5px; padding: 5px 10px; }
+    .card { border: 1px solid #ccc; padding: 15px; margin: 10px 0; }
+    img { max-width: 300px; display: block; margin-top: 10px; }
+    .nav-buttons { margin-top: 20px; }
+    ul#sortable { list-style: none; padding: 0; }
+    li.card { cursor: grab; }
+  </style>
+</head>
+<body>
+
+<h2>三模块打分系统</h2>
+
+<div id="moduleContainer"></div>
+
+<div class="nav-buttons">
+  <button onclick="prevModule()">上一页</button>
+  <button onclick="nextModule()">下一页</button>
+  <button onclick="showSubmitForm()">提交结果</button>
+</div>
+
+<script>
+let currentModule = 1;
+let results = { module1: {}, module2: {}, module3: {} };
+const totalModules = 3;
+
+function loadModule(num) {
+  currentModule = num;
+  let file = `data_module${num}.json`;
+  fetch(file)
+    .then(res => res.json())
+    .then(data => {
+      if (num === 1) renderModule1(data);
+      else if (num === 2) renderModule2(data);
+      else if (num === 3) renderModule3(data);
+    });
+}
+
+function renderModule1(data) {
+  const container = document.getElementById('moduleContainer');
+  container.innerHTML = '<h3>模块一：对单条内容打分（0-4分）</h3>';
+  data.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <p><strong>${item.text}</strong></p>
+      <img src="${item.image}">
+      <label>打分：
+        <select onchange="results.module1[${item.id}] = this.value">
+          <option value="">请选择</option>
+          <option value="0">0分</option>
+          <option value="1">1分</option>
+          <option value="2">2分</option>
+          <option value="3">3分</option>
+          <option value="4">4分</option>
+        </select>
+      </label>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function renderModule2(data) {
+  const container = document.getElementById('moduleContainer');
+  container.innerHTML = '<h3>模块二：两条内容对比（选择更优）</h3>';
+  data.forEach((pair, idx) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <p><strong>对比组 ${idx + 1}</strong></p>
+      <div>
+        <input type="radio" name="pair${idx}" value="A" onchange="results.module2[${idx}] = 'A'">
+        <strong>A:</strong> ${pair.textA} <br>
+        <img src="${pair.imageA}">
+      </div>
+      <div>
+        <input type="radio" name="pair${idx}" value="B" onchange="results.module2[${idx}] = 'B'">
+        <strong>B:</strong> ${pair.textB} <br>
+        <img src="${pair.imageB}">
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function renderModule3(data) {
+  const container = document.getElementById('moduleContainer');
+  container.innerHTML = '<h3>模块三：拖拽排序（从好到差）</h3><ul id="sortable"></ul>';
+  data.forEach((item) => {
+    const li = document.createElement('li');
+    li.className = 'card';
+    li.setAttribute('data-id', item.id);
+    li.setAttribute('draggable', true);
+    li.innerHTML = `<p><strong>${item.text}</strong></p><img src="${item.image}">`;
+    document.getElementById('sortable').appendChild(li);
+  });
+  initDragSort();
+}
+
+function initDragSort() {
+  const list = document.getElementById('sortable');
+  let dragSrcEl = null;
+  list.addEventListener('dragstart', function (e) {
+    dragSrcEl = e.target;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target.outerHTML);
+  });
+  list.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  });
+  list.addEventListener('drop', function (e) {
+    e.preventDefault();
+    if (e.target.closest('.card') && dragSrcEl !== e.target.closest('.card')) {
+      dragSrcEl.remove();
+      e.target.closest('.card').insertAdjacentHTML('beforebegin', e.dataTransfer.getData('text/html'));
+      initDragSort();
+    }
+    updateModule3Results();
+  });
+}
+
+function updateModule3Results() {
+  const listItems = document.querySelectorAll('#sortable .card');
+  results.module3 = {};
+  listItems.forEach((item, index) => {
+    const id = item.getAttribute('data-id');
+    results.module3[id] = index + 1;
+  });
+}
+
+function prevModule() {
+  if (currentModule > 1) loadModule(currentModule - 1);
+}
+
+function nextModule() {
+  if (currentModule < totalModules) loadModule(currentModule + 1);
+}
+
+function validateAllModules() {
+  return (
+    Object.keys(results.module1).length > 0 &&
+    Object.keys(results.module2).length > 0 &&
+    Object.keys(results.module3).length === 5
+  );
+}
+
+function showSubmitForm() {
+  if (!validateAllModules()) {
+    alert("请完成所有模块后再提交！");
+    return;
+  }
+  const formHTML = `
+    <div class="card">
+      <h3>提交前请填写以下信息：</h3>
+      <label>姓名：<input type="text" id="userName"></label><br><br>
+      <label>邮箱：<input type="email" id="userEmail"></label><br><br>
+      <button onclick="saveResults()">确认提交</button>
+    </div>
+  `;
+  document.getElementById('moduleContainer').innerHTML = formHTML;
+}
+
+function saveResults() {
+  const name = document.getElementById('userName')?.value || '';
+  const email = document.getElementById('userEmail')?.value || '';
+  if (!name || !email) {
+    alert("请填写姓名和邮箱再提交！");
+    return;
+  }
+  const finalResults = {
+    user: { name, email },
+    results
+  };
+  const blob = new Blob([JSON.stringify(finalResults, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${name}_评分结果.json`;
+  a.click();
+}
+
+loadModule(1);
+</script>
+
+</body>
+</html>
