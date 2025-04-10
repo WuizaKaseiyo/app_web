@@ -48,9 +48,10 @@ function renderModule1(data) {
   data.forEach(item => {
     const card = document.createElement('div');
     card.className = 'card';
+    const imgHTML = (item.image && item.image.trim() !== "") ? `<img src="${item.image}">` : "";
     card.innerHTML = `
       <p><strong>${item.text}</strong></p>
-      <img src="${item.image}">
+      ${imgHTML}
       <label>打分：
         <select onchange="results.module1[${item.id}] = this.value">
           <option value="">请选择</option>
@@ -65,6 +66,7 @@ function renderModule1(data) {
     container.appendChild(card);
   });
 }
+
 
 function renderModule2(data) {
   const container = document.getElementById('moduleContainer');
