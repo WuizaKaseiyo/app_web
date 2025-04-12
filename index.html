@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -8,7 +7,13 @@
     body { font-family: Arial; margin: 20px; }
     button { margin: 10px 5px; padding: 5px 10px; }
     .card { border: 1px solid #ccc; padding: 15px; margin: 10px 0; }
-    img { max-width: 200px; height: auto; display: inline-block; margin: 10px 0; border-radius: 6px; }
+    img {
+      max-width: 200px;
+      height: auto;
+      display: block;
+      margin: 10px auto;
+      border-radius: 6px;
+    }
     .nav-buttons { margin-top: 20px; }
     ul#sortable { list-style: none; padding: 0; }
     li.card { cursor: grab; }
@@ -21,8 +26,8 @@
 <div id="moduleContainer"></div>
 
 <div class="nav-buttons">
-  <button onclick="prevModule()">上一页</button>
-  <button onclick="nextModule()">下一页</button>
+  <button id="prevBtn" onclick="prevModule()">上一页</button>
+  <button id="nextBtn" onclick="nextModule()">下一页</button>
   <button onclick="saveResults()">保存结果</button>
 </div>
 
@@ -34,7 +39,13 @@ const GROUP_COUNT = 5;
 const groupId = Math.floor(Math.random() * GROUP_COUNT) + 1;
 
 function loadModule(num) {
-  let file = `data_module${num}_${groupId}.json`;
+  currentModule = num;
+
+  // 按钮状态控制
+  document.getElementById("prevBtn").disabled = currentModule === 1;
+  document.getElementById("nextBtn").disabled = currentModule === totalModules;
+
+  const file = `data_module${num}_${groupId}.json`;
   fetch(file)
     .then(res => res.json())
     .then(data => {
@@ -75,17 +86,17 @@ function renderModule2(data) {
   data.forEach((pair, idx) => {
     const card = document.createElement('div');
     card.className = 'card';
+    const imgA = pair.imageA ? `<img src="${pair.imageA}">` : "";
+    const imgB = pair.imageB ? `<img src="${pair.imageB}">` : "";
     card.innerHTML = `
       <p><strong>对比组 ${idx + 1}</strong></p>
       <div>
         <input type="radio" name="pair${idx}" value="A" onchange="results.module2[${idx}] = 'A'">
-        <strong>A:</strong> ${pair.textA} <br>
-        <img src="${pair.imageA}">
+        <strong>A:</strong> ${pair.textA} <br>${imgA}
       </div>
       <div>
         <input type="radio" name="pair${idx}" value="B" onchange="results.module2[${idx}] = 'B'">
-        <strong>B:</strong> ${pair.textB} <br>
-        <img src="${pair.imageB}">
+        <strong>B:</strong> ${pair.textB} <br>${imgB}
       </div>
     `;
     container.appendChild(card);
@@ -100,7 +111,8 @@ function renderModule3(data) {
     li.className = 'card';
     li.setAttribute('data-id', item.id);
     li.setAttribute('draggable', true);
-    li.innerHTML = `<p><strong>${item.text}</strong></p><img src="${item.image}">`;
+    const imgHTML = item.image ? `<img src="${item.image}">` : "";
+    li.innerHTML = `<p><strong>${item.text}</strong></p>${imgHTML}`;
     document.getElementById('sortable').appendChild(li);
   });
   initDragSort();
@@ -150,7 +162,7 @@ function validateAllModules() {
   return (
     Object.keys(results.module1).length > 0 &&
     Object.keys(results.module2).length > 0 &&
-    Object.keys(results.module3).length === 5
+    Object.keys(results.module3).length > 0
   );
 }
 
@@ -167,7 +179,7 @@ function saveResults() {
   a.click();
 }
 
-loadModule(1);
+loadModule(currentModule);
 </script>
 
 </body>
