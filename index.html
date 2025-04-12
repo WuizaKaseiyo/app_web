@@ -120,30 +120,30 @@ function renderModule3(data) {
 
 function initDragSort() {
   const list = document.getElementById('sortable');
-  let dragSrcEl = null;
+  let draggedItem = null;
 
-  // 解决重复问题：需要清空列表并重新填充
-  list.addEventListener('dragstart', function (e) {
-    dragSrcEl = e.target;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/html', e.target.outerHTML);
-  });
+  list.querySelectorAll('.card').forEach(item => {
+    item.addEventListener('dragstart', (e) => {
+      draggedItem = item;
+      e.dataTransfer.effectAllowed = 'move';
+    });
 
-  list.addEventListener('dragover', function (e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  });
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
 
-  list.addEventListener('drop', function (e) {
-    e.preventDefault();
-    if (e.target.closest('.card') && dragSrcEl !== e.target.closest('.card')) {
-      dragSrcEl.remove();
-      e.target.closest('.card').insertAdjacentHTML('beforebegin', e.dataTransfer.getData('text/html'));
-      initDragSort(); // Reinitialize after DOM changes
-    }
-    updateModule3Results();
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (draggedItem && draggedItem !== item) {
+        // 插入拖动元素到目标元素前面
+        list.insertBefore(draggedItem, item);
+        updateModule3Results();
+      }
+    });
   });
 }
+
 
 function updateModule3Results() {
   const listItems = document.querySelectorAll('#sortable .card');
