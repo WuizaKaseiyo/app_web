@@ -3,36 +3,38 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>三模块打分系统</title>
+  <title>三模块打分系统（随机组）</title>
   <style>
     body { font-family: Arial; margin: 20px; }
     button { margin: 10px 5px; padding: 5px 10px; }
     .card { border: 1px solid #ccc; padding: 15px; margin: 10px 0; }
-    img { max-width: 300px; display: block; margin-top: 10px; }
+    img { max-width: 200px; height: auto; display: inline-block; margin: 10px 0; border-radius: 6px; }
     .nav-buttons { margin-top: 20px; }
+    ul#sortable { list-style: none; padding: 0; }
+    li.card { cursor: grab; }
   </style>
 </head>
 <body>
 
-<h2>三模块打分系统</h2>
+<h2>三模块打分系统（每位用户随机分配一组）</h2>
 
 <div id="moduleContainer"></div>
 
 <div class="nav-buttons">
   <button onclick="prevModule()">上一页</button>
   <button onclick="nextModule()">下一页</button>
-  <button onclick="showSubmitForm()">提交结果</button>
+  <button onclick="saveResults()">保存结果</button>
 </div>
 
 <script>
 let currentModule = 1;
 let results = { module1: {}, module2: {}, module3: {} };
-
 const totalModules = 3;
+const GROUP_COUNT = 5;
+const groupId = Math.floor(Math.random() * GROUP_COUNT) + 1;
 
 function loadModule(num) {
-  currentModule = num;
-  let file = `data_module${num}.json`;
+  let file = `data_module${num}_${groupId}.json`;
   fetch(file)
     .then(res => res.json())
     .then(data => {
@@ -48,9 +50,10 @@ function renderModule1(data) {
   data.forEach(item => {
     const card = document.createElement('div');
     card.className = 'card';
+    const imgHTML = item.image ? `<img src="${item.image}">` : "";
     card.innerHTML = `
       <p><strong>${item.text}</strong></p>
-      <img src="${item.image}">
+      ${imgHTML}
       <label>打分：
         <select onchange="results.module1[${item.id}] = this.value">
           <option value="">请选择</option>
@@ -89,48 +92,38 @@ function renderModule2(data) {
   });
 }
 
-
 function renderModule3(data) {
   const container = document.getElementById('moduleContainer');
-  container.innerHTML = '<h3>模块三：拖拽排序（从好到差）</h3><ul id="sortable" style="list-style:none;padding:0;"></ul>';
-
-  data.forEach((item, idx) => {
+  container.innerHTML = '<h3>模块三：拖拽排序（从好到差）</h3><ul id="sortable"></ul>';
+  data.forEach((item) => {
     const li = document.createElement('li');
     li.className = 'card';
     li.setAttribute('data-id', item.id);
     li.setAttribute('draggable', true);
-    li.innerHTML = `
-      <p><strong>${item.text}</strong></p>
-      <img src="${item.image}">
-    `;
+    li.innerHTML = `<p><strong>${item.text}</strong></p><img src="${item.image}">`;
     document.getElementById('sortable').appendChild(li);
   });
-
   initDragSort();
 }
 
 function initDragSort() {
   const list = document.getElementById('sortable');
   let dragSrcEl = null;
-
   list.addEventListener('dragstart', function (e) {
     dragSrcEl = e.target;
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/html', e.target.outerHTML);
   });
-
   list.addEventListener('dragover', function (e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   });
-
   list.addEventListener('drop', function (e) {
     e.preventDefault();
     if (e.target.closest('.card') && dragSrcEl !== e.target.closest('.card')) {
       dragSrcEl.remove();
-      const dropHTML = e.dataTransfer.getData('text/html');
-      e.target.closest('.card').insertAdjacentHTML('beforebegin', dropHTML);
-      initDragSort(); // 重新绑定事件
+      e.target.closest('.card').insertAdjacentHTML('beforebegin', e.dataTransfer.getData('text/html'));
+      initDragSort();
     }
     updateModule3Results();
   });
@@ -145,53 +138,12 @@ function updateModule3Results() {
   });
 }
 
-  const container = document.getElementById('moduleContainer');
-  container.innerHTML = '<h3>模块三：对五条内容排序（1为最好，5为最差）</h3>';
-  data.forEach((item, idx) => {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <p><strong>${item.text}</strong></p>
-      <img src="${item.image}">
-      <label>名次：
-        <select onchange="results.module3[${item.id}] = this.value">
-          <option value="">请选择</option>
-          <option value="1">第1名</option>
-          <option value="2">第2名</option>
-          <option value="3">第3名</option>
-          <option value="4">第4名</option>
-          <option value="5">第5名</option>
-        </select>
-      </label>
-    `;
-    container.appendChild(card);
-  });
-}
-
 function prevModule() {
-  if (currentModule > 1) {
-    loadModule(currentModule - 1);
-  }
+  if (currentModule > 1) loadModule(currentModule - 1);
 }
 
 function nextModule() {
-  if (currentModule < totalModules) {
-    loadModule(currentModule + 1);
-  }
-}
-
-function saveResults() {
-  if (!validateAllModules()) {
-    alert("请确保三个模块都完成后再保存结果！");
-    return;
-  }
-
-  const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = '打分结果.json';
-  a.click();
+  if (currentModule < totalModules) loadModule(currentModule + 1);
 }
 
 function validateAllModules() {
@@ -202,40 +154,16 @@ function validateAllModules() {
   );
 }
 
-
-function showSubmitForm() {
-  if (!validateAllModules()) {
-    alert("请完成所有模块打分并排序后再提交！");
-    return;
-  }
-
-  const formHTML = `
-    <div class="card">
-      <h3>提交前请填写以下信息：</h3>
-      <label>姓名：<input type="text" id="userName"></label><br><br>
-      <label>邮箱：<input type="email" id="userEmail"></label><br><br>
-      <button onclick="saveResults()">确认提交</button>
-    </div>
-  `;
-  document.getElementById('moduleContainer').innerHTML = formHTML;
-}
-
 function saveResults() {
-  const name = document.getElementById('userName')?.value || '';
-  const email = document.getElementById('userEmail')?.value || '';
-  if (!name || !email) {
-    alert("请填写姓名和邮箱再提交！");
+  if (!validateAllModules()) {
+    alert("请完成所有模块后再保存结果！");
     return;
   }
-  const finalResults = {
-    user: { name, email },
-    results
-  };
-  const blob = new Blob([JSON.stringify(finalResults, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${name}_评分结果.json`;
+  a.download = `评分结果_组${groupId}.json`;
   a.click();
 }
 
