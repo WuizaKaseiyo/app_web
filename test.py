@@ -1,83 +1,90 @@
 import os
 import json
-import urllib.request
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 import time
+import requests
+from bs4 import BeautifulSoup
 
-def init_driver():
-    options = Options()
-    options.add_argument('--headless')
-    options.add_argument('--disable-gpu')
-    options.add_argument('--no-sandbox')
-    return webdriver.Chrome(options=options)
+headers = {
+    "User-Agent": "Mozilla/5.0"
+}
 
-def extract_image(url, save_path, driver):
-    if os.path.exists(save_path):
-        print(f"[跳过] 已存在 {save_path}")
-        return True
+base_dir = "."  # 当前路径
+image_root = "image"
+module_defs = {
+    1: ["image"],  # 模块1
+    2: ["imageA", "imageB"],  # 模块2
+    3: ["image"]  # 模块3
+}
+
+def extract_image_url(jd_html_url):
     try:
-        driver.get(url)
-        time.sleep(2)
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
-        imgs = driver.find_elements("tag name", "img")
-        for img in imgs:
-            src = img.get_attribute("src") or img.get_attribute("data-lazy-img")
-            if src and "jfs" in src:
-                if src.startswith("//"):
-                    src = "https:" + src
-                os.makedirs(os.path.dirname(save_path), exist_ok=True)
-                urllib.request.urlretrieve(src, save_path)
-                print(f"[保存] {save_path}")
-                return True
-        print(f"[未找到图片] {url}")
+        resp = requests.get(jd_html_url, headers=headers, timeout=10)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        imgs = soup.select("img")
+        for tag in imgs:
+            src = tag.get("src") or tag.get("data-lazy-img")
+            if src and ("jfs" in src or src.startswith("//img")):
+                return "https:" + src if src.startswith("//") else src
     except Exception as e:
-        print(f"[错误] {url} - {e}")
-    return False
+        print(f"[❌ 提取失败] {jd_html_url} - {e}")
+    return None
 
-def process_module1_3(filepath, module_idx, group_idx, driver):
-    with open(filepath, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    image_dir = os.path.join("image", f"set{module_idx}", f"set{module_idx}_{group_idx}")
-    for idx, item in enumerate(data):
-        if "image" in item and item["image"].endswith(".html"):
-            save_path = os.path.join(image_dir, f"{idx + 1}.jpg")
-            success = extract_image(item["image"], save_path, driver)
-            item["image"] = save_path.replace("\\", "/") if success else ""
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def download_image(url, save_path):
+    try:
+        img_data = requests.get(url, headers=headers, timeout=10).content
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, "wb") as f:
+            f.write(img_data)
+        print(f"[✅ 下载成功] {url} -> {save_path}")
+        return True
+    except Exception as e:
+        print(f"[❌ 下载失败] {url} - {e}")
+        return False
 
-def process_module2(filepath, module_idx, group_idx, driver):
-    with open(filepath, "r", encoding="utf-8") as f:
+def process_json(module_id, group_id):
+    json_name = f"data_module{module_id}_{group_id}.json"
+    json_path = os.path.join(base_dir, json_name)
+
+    if not os.path.exists(json_path):
+        print(f"[⚠️ 跳过] 找不到文件 {json_path}")
+        return
+
+    with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    image_dir = os.path.join("image", f"set{module_idx}", f"set{module_idx}_{group_idx}")
+
+    updated = False
     for item in data:
-        for suffix in ["A", "B"]:
-            key = f"image{suffix}"
-            if key in item and item[key].endswith(".html"):
-                save_path = os.path.join(image_dir, f"{item['id']}_{suffix}.jpg")
-                success = extract_image(item[key], save_path, driver)
-                item[key] = save_path.replace("\\", "/") if success else ""
-    with open(filepath, "w", encoding="utf-8") as f:
+        for field in module_defs[module_id]:
+            image_url = item.get(field, "")
+            if image_url.endswith(".html"):
+                suffix = f"_{field[-1]}" if field in ("imageA", "imageB") else ""
+                image_id = str(item["id"]).split("|")[0]  # 用第一个id做文件名
+                image_name = f"{image_id}{suffix}.jpg"
+                save_dir = os.path.join(base_dir, image_root, f"set{module_id}", f"set{module_id}_{group_id}")
+                save_path = os.path.join(save_dir, image_name)
+
+                if os.path.exists(save_path):
+                    print(f"[⏭ 已存在] {save_path}")
+                    item[field] = os.path.relpath(save_path, base_dir).replace("\\", "/")
+                    continue
+
+                real_img_url = extract_image_url(image_url)
+                if real_img_url and download_image(real_img_url, save_path):
+                    item[field] = os.path.relpath(save_path, base_dir).replace("\\", "/")
+                    updated = True
+                else:
+                    print(f"[⚠️ 提取失败] {image_url}")
+    # 回写 JSON 文件
+    with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print(f"[✔ 完成] {json_name}\n")
 
 def run_all():
-    base_dir = "."
-    driver = init_driver()
-    for fname in os.listdir(base_dir):
-        if fname.startswith("data_module") and fname.endswith(".json"):
-            parts = fname.replace(".json", "").split("_")
-            if len(parts) != 3:
-                continue
-            _, module_idx, group_idx = parts
-            filepath = os.path.join(base_dir, fname)
-            print(f"🚀 处理：{fname}")
-            if module_idx == "2":
-                process_module2(filepath, module_idx, group_idx, driver)
-            else:
-                process_module1_3(filepath, module_idx, group_idx, driver)
-    driver.quit()
+    for module_id in [1, 2, 3]:
+        for group_id in [1, 2, 3]:
+            process_json(module_id, group_id)
+            time.sleep(1)  # 避免访问过快被封
 
 if __name__ == "__main__":
     run_all()
