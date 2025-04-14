@@ -35,8 +35,8 @@
 let currentModule = 1;
 let results = { module1: {}, module2: {}, module3: {} };
 const totalModules = 3;
-let module3Data = [];  // 全部数据
-let module3Groups = []; // 分组数据
+let module3Data = [];
+let module3Groups = [];
 let currentGroup = 0;
 const groupSize = 5;
 
@@ -69,7 +69,7 @@ function renderModule1(data) {
   data.forEach(item => {
     const card = document.createElement('div');
     card.className = 'card';
-    const imgHTML = item.image ? `<img src="${item.image}">` : "";
+    const imgHTML = getAllImages(item.image);
     card.innerHTML = `
       <p><strong>商品名称：</strong>${item.name}</p>
       <p><strong>评价内容：</strong>${item.text}</p>
@@ -95,8 +95,8 @@ function renderModule2(data) {
   data.forEach(pair => {
     const card = document.createElement('div');
     card.className = 'card';
-    const imgA = pair.imageA ? `<img src="${pair.imageA}">` : "";
-    const imgB = pair.imageB ? `<img src="${pair.imageB}">` : "";
+    const imgA = getAllImages(pair.imageA);
+    const imgB = getAllImages(pair.imageB);
     card.innerHTML = `
       <p><strong>对比组ID：${pair.id}</strong></p>
       <div>
@@ -129,7 +129,7 @@ function renderModule3Group() {
     li.className = 'card';
     li.setAttribute('data-id', item.id);
     li.setAttribute('draggable', true);
-    const imgHTML = item.image ? `<img src="${item.image}">` : "";
+    const imgHTML = getAllImages(item.image);
     li.innerHTML = `
       <p><strong>商品名称：</strong>${item.name}</p>
       <p>${item.text}</p>
@@ -208,7 +208,7 @@ function validateAllModules() {
 
 async function saveResults() {
   if (!validateAllModules()) {
-    alert("Please complete all the questions!");
+    alert("请完成所有模块后再保存结果！");
     return;
   }
 
@@ -245,6 +245,34 @@ async function saveResults() {
   a.href = url;
   a.download = `Evaluate.json`;
   a.click();
+}
+
+// 🔧 新增：展示多图辅助函数
+function getAllImages(basePath) {
+  if (!basePath) return "";
+  const ext = basePath.endsWith(".jpg") ? ".jpg" : "";
+  const prefix = basePath.replace(/_\d+\.jpg$/, "");
+  const images = [];
+
+  for (let i = 1; i <= 5; i++) {
+    const imgPath = `${prefix}_${i}${ext}`;
+    if (imageExists(imgPath)) {
+      images.push(`<img src="${imgPath}" alt="图${i}">`);
+    }
+  }
+
+  return images.join("");
+}
+
+function imageExists(url) {
+  const xhr = new XMLHttpRequest();
+  xhr.open("HEAD", url, false); // 同步
+  try {
+    xhr.send();
+    return xhr.status !== 404;
+  } catch (e) {
+    return false;
+  }
 }
 
 loadModule(currentModule);
