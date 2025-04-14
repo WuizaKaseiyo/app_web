@@ -11,23 +11,37 @@ headers = {
 base_dir = "."  # 当前路径
 image_root = "image"
 module_defs = {
-    1: ["image"],  # 模块1
-    2: ["imageA", "imageB"],  # 模块2
-    3: ["image"]  # 模块3
+    1: ["image"],
+    2: ["imageA", "imageB"],
+    3: ["image"]
 }
 
-def extract_image_url(jd_html_url):
+# 全局缓存：避免重复提取和下载
+image_cache = {}
+
+def extract_review_image_urls(jd_html_url):
+    """提取评论区图片地址（仅第一次提取）"""
+    if jd_html_url in image_cache:
+        return image_cache[jd_html_url]
+
     try:
         resp = requests.get(jd_html_url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, "html.parser")
-        imgs = soup.select("img")
-        for tag in imgs:
+        img_tags = soup.select(".dt-content img")
+
+        img_urls = []
+        for tag in img_tags:
             src = tag.get("src") or tag.get("data-lazy-img")
             if src and ("jfs" in src or src.startswith("//img")):
-                return "https:" + src if src.startswith("//") else src
+                full_url = "https:" + src if src.startswith("//") else src
+                img_urls.append(full_url)
+
+        image_cache[jd_html_url] = img_urls
+        return img_urls
     except Exception as e:
         print(f"[❌ 提取失败] {jd_html_url} - {e}")
-    return None
+        image_cache[jd_html_url] = []
+        return []
 
 def download_image(url, save_path):
     try:
@@ -41,8 +55,8 @@ def download_image(url, save_path):
         print(f"[❌ 下载失败] {url} - {e}")
         return False
 
-def process_json(module_id, group_id):
-    json_name = f"data_module{module_id}_{group_id}.json"
+def process_json(module_id):
+    json_name = f"data_module{module_id}.json"
     json_path = os.path.join(base_dir, json_name)
 
     if not os.path.exists(json_path):
@@ -55,26 +69,39 @@ def process_json(module_id, group_id):
     updated = False
     for item in data:
         for field in module_defs[module_id]:
-            image_url = item.get(field, "")
-            if image_url.endswith(".html"):
-                suffix = f"_{field[-1]}" if field in ("imageA", "imageB") else ""
-                image_id = str(item["id"]).split("|")[0]  # 用第一个id做文件名
-                image_name = f"{image_id}{suffix}.jpg"
-                save_dir = os.path.join(base_dir, image_root, f"set{module_id}", f"set{module_id}_{group_id}")
-                save_path = os.path.join(save_dir, image_name)
+            html_url = item.get(field, "")
+            if not html_url.endswith(".html"):
+                continue
+
+            suffix = f"_{field[-1]}" if field in ("imageA", "imageB") else ""
+            id_part = str(item["id"]).split("|")[0]
+            save_dir = os.path.join(base_dir, image_root, f"set{module_id}")
+
+            img_urls = extract_review_image_urls(html_url)
+            if not img_urls:
+                print(f"[⚠️ 无评论图] {html_url}")
+                continue
+
+            image_list_field = f"{field}_list"
+            item[image_list_field] = []
+
+            for idx, img_url in enumerate(img_urls):
+                img_name = f"{id_part}{suffix}_{idx+1}.jpg"
+                save_path = os.path.join(save_dir, img_name)
+                img_rel_path = os.path.relpath(save_path, base_dir).replace("\\", "/")
 
                 if os.path.exists(save_path):
                     print(f"[⏭ 已存在] {save_path}")
-                    item[field] = os.path.relpath(save_path, base_dir).replace("\\", "/")
-                    continue
-
-                real_img_url = extract_image_url(image_url)
-                if real_img_url and download_image(real_img_url, save_path):
-                    item[field] = os.path.relpath(save_path, base_dir).replace("\\", "/")
-                    updated = True
                 else:
-                    print(f"[⚠️ 提取失败] {image_url}")
-    # 回写 JSON 文件
+                    if not download_image(img_url, save_path):
+                        continue
+
+                item[image_list_field].append(img_rel_path)
+
+            # 设置 image/imageA/imageB 为第一张图，方便前端兼容
+            item[field] = item[image_list_field][0] if item[image_list_field] else ""
+            updated = True
+
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -82,9 +109,8 @@ def process_json(module_id, group_id):
 
 def run_all():
     for module_id in [1, 2, 3]:
-        for group_id in [1, 2, 3]:
-            process_json(module_id, group_id)
-            time.sleep(1)  # 避免访问过快被封
+        process_json(module_id)
+        time.sleep(1)
 
 if __name__ == "__main__":
     run_all()

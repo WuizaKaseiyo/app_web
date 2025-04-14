@@ -1,75 +1,74 @@
 import pandas as pd
 import os
 import json
+import random
+from itertools import combinations
 
+# 读取并重命名
+df = pd.read_excel("用研_评价抽样_20250414.xlsx")
+df = df.rename(columns={
+    "评价": "id",
+    "评价内容链接": "image",
+    "评价文字内容": "text",
+    "商品名称": "name"
+})
 
-excel_path = "用研_评价抽样_20250403(1).xlsx"
-output_dir = "."
-group_counts = {
-    1: (10, 3),  # 模块1：每组10条，共3组
-    2: (1, 3),   # 模块2：每组1条对比，共3组
-    3: (5, 3)    # 模块3：每组5条，共3组
-}
+# 清洗数据
+df = df.dropna(subset=["id", "image", "text", "name"]).drop_duplicates(subset="id").reset_index(drop=True)
 
+# 仅取前50条
+df = df.sample(frac=1, random_state=42).head(50).reset_index(drop=True)
 
-df = pd.read_excel(excel_path)
+# 输出目录
+output_dir = "./"
+os.makedirs(output_dir, exist_ok=True)
 
-
-df = df[df["模块"].isin([1, 2, 3])]
-df = df.dropna(subset=["评价ID", "文本A", "图片链接A（html）"])
-
-
-module_data = {1: [], 2: [], 3: []}
-
+# ========== 模块 1: 单条打分（50条） ==========
+module1 = []
 for _, row in df.iterrows():
-    mid = row["模块"]
-    item_id = str(row["评价ID"])
-    textA = str(row["文本A"]).strip()
-    imgA = str(row["图片链接A（html）"]).strip()
-    if mid == 1:
-        module_data[1].append({
-            "id": item_id,
-            "text": textA,
-            "image": imgA
+    module1.append({
+        "id": str(row["id"]),
+        "text": row["text"],
+        "image": row["image"],
+        "name": row["name"]
+    })
+with open(f"{output_dir}/data_module1.json", "w", encoding="utf-8") as f:
+    json.dump(module1, f, ensure_ascii=False, indent=2)
+
+# ========== 模块 2: 两两配对（25组） ==========
+pairs = list(combinations(df.index, 2))
+random.seed(42)
+random.shuffle(pairs)
+selected_pairs = pairs[:25]
+
+module2 = []
+for idx_a, idx_b in selected_pairs:
+    a = df.loc[idx_a]
+    b = df.loc[idx_b]
+    module2.append({
+        "id": f"{a['id']}|{b['id']}",
+        "textA": a["text"],
+        "imageA": a["image"],
+        "nameA": a["name"],
+        "textB": b["text"],
+        "imageB": b["image"],
+        "nameB": b["name"]
+    })
+with open(f"{output_dir}/data_module2.json", "w", encoding="utf-8") as f:
+    json.dump(module2, f, ensure_ascii=False, indent=2)
+
+# ========== 模块 3: 拖拽排序题（10组，每组5条） ==========
+groups = [df.iloc[i*5:(i+1)*5] for i in range(10)]
+module3 = []
+for g in groups:
+    for _, row in g.iterrows():
+        module3.append({
+            "id": str(row["id"]),
+            "text": row["text"],
+            "image": row["image"],
+            "name": row["name"]
         })
-    elif mid == 2 and pd.notna(row.get("文本B")) and pd.notna(row.get("图片链接B（html）")):
-        textB = str(row["文本B"]).strip()
-        imgB = str(row["图片链接B（html）"]).strip()
-        idB = str(row["评价ID_B"]) if "评价ID_B" in row and pd.notna(row["评价ID_B"]) else "UNKNOWN"
-        module_data[2].append({
-            "id": f"{item_id}|{idB}",
-            "textA": textA,
-            "imageA": imgA,
-            "textB": textB,
-            "imageB": imgB
-        })
-    elif mid == 3:
-        module_data[3].append({
-            "id": item_id,
-            "text": textA,
-            "image": imgA
-        })
+with open(f"{output_dir}/data_module3.json", "w", encoding="utf-8") as f:
+    json.dump(module3, f, ensure_ascii=False, indent=2)
 
-
-def split_and_save(module_id, items, per_group, total_groups):
-    total_required = per_group * total_groups
-    assert len(items) >= total_required, f"模块{module_id} 数据不足：需要 {total_required} 条，实际 {len(items)} 条"
-
-    used = set()
-    for gid in range(1, total_groups + 1):
-        group_items = []
-        for item in items:
-            if item["id"] not in used:
-                group_items.append(item)
-                used.add(item["id"])
-            if len(group_items) == per_group:
-                break
-        fname = f"data_module{module_id}_{gid}.json"
-        with open(os.path.join(output_dir, fname), "w", encoding="utf-8") as f:
-            json.dump(group_items, f, ensure_ascii=False, indent=2)
-        print(f"[✅ 写入] {fname} 共 {len(group_items)} 条")
-
-# === 执行 ===
-for module_id in [1, 2, 3]:
-    per_group, total_groups = group_counts[module_id]
-    split_and_save(module_id, module_data[module_id], per_group, total_groups)
+print("✅ 已生成 data_module1.json / 2 / 3（每模块仅一个文件）")
