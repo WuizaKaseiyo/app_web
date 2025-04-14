@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>三模块打分系统（随机组）</title>
+  <title>三模块打分系统</title>
   <style>
     body { font-family: Arial; margin: 20px; }
     button { margin: 10px 5px; padding: 5px 10px; }
@@ -21,7 +21,7 @@
 </head>
 <body>
 
-<h2>三模块打分系统（每位用户随机分配一组）</h2>
+<h2>三模块打分系统</h2>
 
 <div id="moduleContainer"></div>
 
@@ -35,16 +35,13 @@
 let currentModule = 1;
 let results = { module1: {}, module2: {}, module3: {} };
 const totalModules = 3;
-const GROUP_COUNT = 3;  // 假设每模块有3组
-const groupId = Math.floor(Math.random() * GROUP_COUNT) + 1;
 
 function loadModule(num) {
   currentModule = num;
-
   document.getElementById("prevBtn").disabled = currentModule === 1;
   document.getElementById("nextBtn").disabled = currentModule === totalModules;
 
-  const file = `data_module${num}_${groupId}.json`;
+  const file = `data_module${num}.json`;
   fetch(file)
     .then(res => res.json())
     .then(data => {
@@ -106,7 +103,7 @@ function renderModule2(data) {
 function renderModule3(data) {
   const container = document.getElementById('moduleContainer');
   container.innerHTML = '<h3>模块三：拖拽排序（从好到差）</h3><ul id="sortable"></ul>';
-  data.forEach((item) => {
+  data.forEach(item => {
     const li = document.createElement('li');
     li.className = 'card';
     li.setAttribute('data-id', item.id);
@@ -175,18 +172,13 @@ async function saveResults() {
     return;
   }
 
-  const file1 = `data_module1_${groupId}.json`;
-  const file2 = `data_module2_${groupId}.json`;
-  const file3 = `data_module3_${groupId}.json`;
-
   const [data1, data2, data3] = await Promise.all([
-    fetch(file1).then(res => res.json()),
-    fetch(file2).then(res => res.json()),
-    fetch(file3).then(res => res.json())
+    fetch('data_module1.json').then(res => res.json()),
+    fetch('data_module2.json').then(res => res.json()),
+    fetch('data_module3.json').then(res => res.json())
   ]);
 
   const output = {
-    groupId,
     module1: data1.map(item => ({
       id: item.id,
       name: item.name,
@@ -211,7 +203,7 @@ async function saveResults() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Evaluate${groupId}.json`;
+  a.download = `评估结果.json`;
   a.click();
 }
 
