@@ -15,7 +15,7 @@
       border-radius: 6px;
     }
     .nav-buttons { margin-top: 20px; }
-    ul#sortable { list-style: none; padding: 0; }
+    ul.sortable { list-style: none; padding: 0; }
     li.card { cursor: grab; }
   </style>
 </head>
@@ -35,6 +35,10 @@
 let currentModule = 1;
 let results = { module1: {}, module2: {}, module3: {} };
 const totalModules = 3;
+let module3Data = [];  // 全部数据
+let module3Groups = []; // 分组数据
+let currentGroup = 0;
+const groupSize = 5;
 
 function loadModule(num) {
   currentModule = num;
@@ -47,7 +51,15 @@ function loadModule(num) {
     .then(data => {
       if (num === 1) renderModule1(data);
       else if (num === 2) renderModule2(data);
-      else if (num === 3) renderModule3(data);
+      else if (num === 3) {
+        module3Data = data;
+        module3Groups = [];
+        for (let i = 0; i < data.length; i += groupSize) {
+          module3Groups.push(data.slice(i, i + groupSize));
+        }
+        currentGroup = 0;
+        renderModule3Group();
+      }
     });
 }
 
@@ -100,24 +112,37 @@ function renderModule2(data) {
   });
 }
 
-function renderModule3(data) {
+function renderModule3Group() {
   const container = document.getElementById('moduleContainer');
-  container.innerHTML = '<h3>模块三：拖拽排序（从好到差）</h3><ul id="sortable"></ul>';
-  data.forEach(item => {
+  container.innerHTML = `
+    <h3>模块三：拖拽排序（从好到差） - 第 ${currentGroup + 1} 组 / ${module3Groups.length}</h3>
+    <ul id="sortableGroup" class="sortable"></ul>
+    <div style="margin-top: 10px;">
+      <button onclick="prevGroup()">上一组</button>
+      <button onclick="nextGroup()">下一组</button>
+    </div>
+  `;
+
+  const ul = document.getElementById("sortableGroup");
+  module3Groups[currentGroup].forEach(item => {
     const li = document.createElement('li');
     li.className = 'card';
     li.setAttribute('data-id', item.id);
-    li.setAttribute('data-name', item.name);
     li.setAttribute('draggable', true);
     const imgHTML = item.image ? `<img src="${item.image}">` : "";
-    li.innerHTML = `<p><strong>商品名称：</strong>${item.name}</p><p>${item.text}</p>${imgHTML}`;
-    document.getElementById('sortable').appendChild(li);
+    li.innerHTML = `
+      <p><strong>商品名称：</strong>${item.name}</p>
+      <p>${item.text}</p>
+      ${imgHTML}
+    `;
+    ul.appendChild(li);
   });
-  initDragSort();
+
+  initDragSort("sortableGroup");
 }
 
-function initDragSort() {
-  const list = document.getElementById('sortable');
+function initDragSort(listId) {
+  const list = document.getElementById(listId);
   let draggedItem = null;
 
   list.querySelectorAll('.card').forEach(item => {
@@ -135,19 +160,34 @@ function initDragSort() {
       e.preventDefault();
       if (draggedItem && draggedItem !== item) {
         list.insertBefore(draggedItem, item);
-        updateModule3Results();
+        saveCurrentGroupOrder();
       }
     });
   });
 }
 
-function updateModule3Results() {
-  const listItems = document.querySelectorAll('#sortable .card');
-  results.module3 = {};
+function saveCurrentGroupOrder() {
+  const listItems = document.querySelectorAll('#sortableGroup .card');
   listItems.forEach((item, index) => {
     const id = item.getAttribute('data-id');
     results.module3[id] = index + 1;
   });
+}
+
+function prevGroup() {
+  saveCurrentGroupOrder();
+  if (currentGroup > 0) {
+    currentGroup--;
+    renderModule3Group();
+  }
+}
+
+function nextGroup() {
+  saveCurrentGroupOrder();
+  if (currentGroup < module3Groups.length - 1) {
+    currentGroup++;
+    renderModule3Group();
+  }
 }
 
 function prevModule() {
@@ -168,7 +208,7 @@ function validateAllModules() {
 
 async function saveResults() {
   if (!validateAllModules()) {
-    alert("请完成所有模块后再保存结果！");
+    alert("Please complete all the questions!");
     return;
   }
 
@@ -203,7 +243,7 @@ async function saveResults() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `评估结果.json`;
+  a.download = `Evaluate.json`;
   a.click();
 }
 
