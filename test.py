@@ -8,7 +8,7 @@ headers = {
     "User-Agent": "Mozilla/5.0"
 }
 
-base_dir = "."  # 当前路径
+base_dir = "."  
 image_root = "image"
 module_defs = {
     1: ["image"],
@@ -16,11 +16,11 @@ module_defs = {
     3: ["image"]
 }
 
-# 全局缓存：避免重复提取和下载
+
 image_cache = {}
 
 def extract_review_image_urls(jd_html_url):
-    """提取评论区图片地址（仅第一次提取）"""
+
     if jd_html_url in image_cache:
         return image_cache[jd_html_url]
 
@@ -39,7 +39,7 @@ def extract_review_image_urls(jd_html_url):
         image_cache[jd_html_url] = img_urls
         return img_urls
     except Exception as e:
-        print(f"[❌ 提取失败] {jd_html_url} - {e}")
+        # print(f"[fail] {jd_html_url} - {e}")
         image_cache[jd_html_url] = []
         return []
 
@@ -49,10 +49,10 @@ def download_image(url, save_path):
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         with open(save_path, "wb") as f:
             f.write(img_data)
-        print(f"[✅ 下载成功] {url} -> {save_path}")
+        # print(f"[success] {url} -> {save_path}")
         return True
     except Exception as e:
-        print(f"[❌ 下载失败] {url} - {e}")
+        # print(f"[fail] {url} - {e}")
         return False
 
 def process_json(module_id):
@@ -60,7 +60,7 @@ def process_json(module_id):
     json_path = os.path.join(base_dir, json_name)
 
     if not os.path.exists(json_path):
-        print(f"[⚠️ 跳过] 找不到文件 {json_path}")
+        # print(f"no file {json_path}")
         return
 
     with open(json_path, "r", encoding="utf-8") as f:
@@ -79,7 +79,7 @@ def process_json(module_id):
 
             img_urls = extract_review_image_urls(html_url)
             if not img_urls:
-                print(f"[⚠️ 无评论图] {html_url}")
+                # print(f"[no image] {html_url}")
                 continue
 
             image_list_field = f"{field}_list"
@@ -91,21 +91,19 @@ def process_json(module_id):
                 img_rel_path = os.path.relpath(save_path, base_dir).replace("\\", "/")
 
                 if os.path.exists(save_path):
-                    print(f"[⏭ 已存在] {save_path}")
+                    # print(f"[exist] {save_path}")
                 else:
                     if not download_image(img_url, save_path):
                         continue
 
                 item[image_list_field].append(img_rel_path)
 
-            # 设置 image/imageA/imageB 为第一张图，方便前端兼容
             item[field] = item[image_list_field][0] if item[image_list_field] else ""
             updated = True
 
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-    print(f"[✔ 完成] {json_name}\n")
 
 def run_all():
     for module_id in [1, 2, 3]:
